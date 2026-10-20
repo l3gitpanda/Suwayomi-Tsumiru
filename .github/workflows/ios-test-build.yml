@@ -1,0 +1,41 @@
+# Temporary: builds an unsigned iOS app from this branch so the locked-chapter
+# fix can be tried on a phone before the PR goes upstream. Not part of the PR.
+name: iOS test build
+
+on:
+  push:
+    branches: [claude/ipa-test-build]
+  workflow_dispatch:
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version-file: .fvmrc
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build iOS (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        # An .ipa is just a zip with the .app inside a top-level Payload/ dir.
+        run: |
+          mkdir -p dist Payload
+          APP=$(find build/ios/iphoneos -maxdepth 1 -name "*.app" | head -1)
+          cp -R "$APP" Payload/
+          zip -r -y "dist/tsumiru-locked-chapter-fix-ios.ipa" Payload
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: tsumiru-locked-chapter-fix-ios
+          path: dist/tsumiru-locked-chapter-fix-ios.ipa
+          retention-days: 7
